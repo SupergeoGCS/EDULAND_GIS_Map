@@ -106,7 +106,6 @@ function selectFeature(feature){
  const heading=document.createElement('h2');heading.textContent=displayValue(value(feature,'parcel'));content.append(heading);
  const loc=document.createElement('p');loc.className='detail-location';loc.textContent=[value(feature,'city'),value(feature,'district'),value(feature,'section')].filter(Boolean).join(' / ')||'未提供位置資訊';content.append(loc);
  const badge=document.createElement('span');badge.className='usage-badge';badge.textContent=displayValue(value(feature,'usage'));content.append(badge);
- if(parcelCenter)addBufferControls(content,feature,parcelCenter);
  const tab=document.createElement('div');tab.className='detail-tabs';tab.textContent='土地標示部';content.append(tab);
  const list=document.createElement('dl');list.className='property-list';
  for(const key of ['city','district','section','parcel','zone','category','owner','manager','propertyId']){const row=document.createElement('div');const dt=document.createElement('dt');dt.textContent=fields[key];const dd=document.createElement('dd');dd.textContent=displayValue(value(feature,key));row.append(dt,dd);list.append(row);}content.append(list);
@@ -116,6 +115,7 @@ function selectFeature(feature){
   const mapsLink=document.createElement('a');mapsLink.className='google-maps-link';
   const mapsURL=new URL('https://www.google.com/maps/search/');mapsURL.searchParams.set('api','1');mapsURL.searchParams.set('query',`${parcelCenter.lat.toFixed(6)},${parcelCenter.lng.toFixed(6)}`);
   mapsLink.href=mapsURL.href;mapsLink.target='_blank';mapsLink.rel='noopener noreferrer';mapsLink.referrerPolicy='no-referrer';mapsLink.textContent='在 Google 地圖查看 ↗';mapsLink.setAttribute('aria-label',`在 Google 地圖查看地籍 ${displayValue(value(feature,'parcel'))}（另開分頁）`);mapsLink.title='以地籍外框中心座標定位，另開分頁';content.append(mapsLink);
+  addBufferControls(content,feature,parcelCenter);
  }
  const raw=document.createElement('details');raw.className='raw-details';const summary=document.createElement('summary');summary.textContent='查看全部原始屬性';raw.append(summary);const rawList=document.createElement('dl');rawList.className='property-list';
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
