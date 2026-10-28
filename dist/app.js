@@ -28,7 +28,7 @@ const parcelGroup = L.geoJSON(null,{style:feature=>parcelStyle(feature),onEachFe
  layer.bindTooltip(escapeHTML(value(feature,'parcel')||'未提供地號'),{permanent:true,direction:'center',className:'parcel-label'});
 }}).addTo(map);
 const labelPane = map.createPane('reference');labelPane.style.zIndex=350;
-const overlayDefinitions = [['CITY','縣市界',17],['TOWN','鄉鎮市區界',17],['LANDSECT','地段外圍圖',18],['SCHOOL','各級學校範圍',19],['LUIMAP','國土利用現況',18]];
+const overlayDefinitions = [['LANDSECT','地段外圍圖',18],['LUIMAP','國土利用現況調查成果圖',18],['CITY','縣市界',17],['TOWN','鄉鎮區界',17],['Village','村里界',19],['SCHOOL','各級學校範圍',19]];
 for(const [code,name,max] of overlayDefinitions){
  const layer=L.tileLayer(nlsc(code),{maxNativeZoom:max,maxZoom:22,opacity:.65,attribution:nlscCredit,pane:'reference'});
  addOverlayControl(name,layer,`國土測繪中心 · ${code}`);
