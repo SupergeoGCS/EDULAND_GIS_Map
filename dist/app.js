@@ -63,6 +63,7 @@ function updateDistrict(){const subset=dataset.features.filter(f=>!$('city').val
 function updateSection(){const subset=dataset.features.filter(f=>(!$('city').value||String(value(f,'city'))===$('city').value)&&(!$('district').value||String(value(f,'district'))===$('district').value));populateSelect('section',subset);}
 $('city').onchange=()=>{$('district').value='';$('section').value='';updateDistrict();};$('district').onchange=()=>{$('section').value='';updateSection();};
 function applySearch(){
+ updateSearchSummary();
  const keyword=$('keyword').value.trim().toLocaleLowerCase();
  filtered=dataset.features.filter(f=>['city','district','section','usage'].every(k=>!$(k).value||String(value(f,k))===$(k).value)&&(!keyword||Object.values(f.properties||{}).some(v=>displayValue(v).toLocaleLowerCase().includes(keyword))));
  if(selected&&!filtered.includes(selected)){selected=null;$('details').hidden=true;}
@@ -115,6 +116,16 @@ function selectFeature(feature){
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
  const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
 }
+function updateSearchSummary(){
+ const parts=['city','district','section','usage'].map(key=>$(key).value).filter(Boolean);
+ if($('keyword').value.trim())parts.push(`關鍵字：${$('keyword').value.trim()}`);
+ $('search-summary').textContent=parts.join(' / ')||'全部地籍';
+}
+$('search-toggle').onclick=()=>{
+ const collapsed=!$('search-conditions').hidden;
+ $('search-conditions').hidden=collapsed;$('search-summary').hidden=!collapsed;
+ $('search-toggle').setAttribute('aria-expanded',String(!collapsed));$('search-toggle-label').textContent=collapsed?'展開 ⌄':'收折 ⌃';updateSearchSummary();
+};
 $('search-form').onsubmit=e=>{e.preventDefault();applySearch();fitResults();};$('fit-results').onclick=fitResults;
 $('reset').onclick=()=>{['city','district','section','keyword','usage'].forEach(k=>$(k).value='');updateDistrict();applySearch();fitResults();};
 $('close-details').onclick=()=>{selected=null;$('details').hidden=true;parcelGroup.setStyle(parcelStyle);renderResults();};
