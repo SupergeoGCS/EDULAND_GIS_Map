@@ -180,7 +180,7 @@ function updateSearchSummary(){
 $('search-toggle').onclick=()=>{
  const collapsed=!$('search-conditions').hidden;
  $('search-conditions').hidden=collapsed;$('search-summary').hidden=!collapsed;
- $('search-toggle').setAttribute('aria-expanded',String(!collapsed));$('search-toggle-label').textContent=collapsed?'展開 ⌄':'收折 ⌃';updateSearchSummary();
+ $('search-toggle').setAttribute('aria-expanded',String(!collapsed));$('search-toggle').setAttribute('aria-label',collapsed?'展開查詢條件':'收折查詢條件');$('search-toggle-label').textContent=collapsed?'展開':'收折';updateSearchSummary();
 };
 $('search-form').onsubmit=e=>{e.preventDefault();applySearch();fitResults();};$('fit-results').onclick=fitResults;
 $('reset').onclick=()=>{['city','district','section','keyword','usage'].forEach(k=>$(k).value='');updateDistrict();applySearch();fitResults();};
