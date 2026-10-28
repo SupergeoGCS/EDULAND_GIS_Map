@@ -28,6 +28,7 @@ const parcelGroup = L.geoJSON(null,{style:feature=>parcelStyle(feature),onEachFe
  layer.bindTooltip(escapeHTML(value(feature,'parcel')||'未提供地號'),{permanent:true,direction:'center',className:'parcel-label'});
 }}).addTo(map);
 const labelPane = map.createPane('reference');labelPane.style.zIndex=350;
+const overlayRegistry = [];
 const overlayDefinitions = [['LANDSECT','地段外圍圖',18],['LUIMAP','國土利用現況調查成果圖',18],['CITY','縣市界',17],['TOWN','鄉鎮區界',17],['Village','村里界',19],['SCHOOL','各級學校範圍',19]];
 for(const [code,name,max] of overlayDefinitions){
  const layer=L.tileLayer(nlsc(code),{maxNativeZoom:max,maxZoom:22,opacity:.65,attribution:nlscCredit,pane:'reference'});
@@ -35,6 +36,7 @@ for(const [code,name,max] of overlayDefinitions){
  let warned=false;layer.on('tileerror',()=>{if(!warned&&map.hasLayer(layer)){warned=true;toast(`${name}服務暫時無法載入，請稍後再試。`);}});
 }
 function addOverlayControl(name,layer,subtitle='本機匯入 · 工作階段資料'){
+ overlayRegistry.push({name,layer});
  const label=document.createElement('label');label.className='layer-toggle';
  const check=document.createElement('input');check.type='checkbox';check.addEventListener('change',()=>check.checked?layer.addTo(map):map.removeLayer(layer));
  const span=document.createElement('span');const bold=document.createElement('b');bold.textContent=name;const small=document.createElement('small');small.textContent=subtitle;span.append(bold,small);label.append(check,span);$('overlays').append(label);return check;

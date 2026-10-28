@@ -12,7 +12,13 @@
 
 ## 執行與部署
 
-在本目錄執行 `node serve.mjs`，開啟 http://127.0.0.1:4173 。正式環境可將 `dist/` 部署於 HTTPS 靜態網站或既有系統的獨立路徑。Leaflet、shpjs 6.1.0、fflate 0.8.2 已固定版本存於 `dist/vendor/`；底圖需要對外網路。字型服務無法連線時自動使用系統字型。
+在本目錄執行 `node serve.mjs`，開啟 http://127.0.0.1:4173 。正式環境可將 `dist/` 部署於 HTTPS 靜態網站或既有系統的獨立路徑。Leaflet、shpjs 6.1.0、fflate 0.8.2、html2canvas 1.4.1 已固定版本存於 `dist/vendor/`；底圖需要對外網路。字型服務無法連線時自動使用系統字型。
+
+## 地圖圖片匯出
+
+右上角「匯出地圖」可將目前地圖範圍製作為 PNG，支援自訂圖名及標準／2 倍像素輸出。匯出包含正在顯示的底圖、地籍外框、地號標籤、套疊圖層、比例尺與來源標示，並附圖名、圖層名稱、經緯度範圍與臺灣時間；不包含查詢側欄、工具列、屬性明細或匯出視窗。圖片保留地圖當前選取、透明度及顯示設定；加倍像素不增加原始底圖細節。
+
+圖片完全在瀏覽器製作。先等待圖磚載入，並以 CORS 檢查可見圖磚；來源逾時或拒絕跨來源讀取時會顯示錯誤，避免靜默輸出缺底圖的圖片。生成後顯示預覽並下載，使用者也可再次點選「下載圖片」。電子地圖、正射影像、OSM 及正射影像搭配村里界已完成瀏覽器匯出驗證。
 
 ## 已實作功能
 
@@ -55,5 +61,6 @@ window.MOEGIS.loadGeoJSON(featureCollection, {
 - Leaflet：https://leafletjs.com/ （BSD-2-Clause）
 - shpjs：https://github.com/calvinmetcalf/shapefile-js （MIT）
 - fflate：https://github.com/101arrowz/fflate （MIT）
+- html2canvas：https://html2canvas.hertzen.com/ （MIT）
 
 第三方原始授權檔保留於 `dist/vendor/`。參考手冊只作功能需求來源，未納入網站公開內容。
