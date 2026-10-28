@@ -12,6 +12,8 @@
 
 ## 執行與部署
 
+Demo 網址：https://supergeogcs.github.io/EDULAND_GIS_Map/ 。推送至 `main` 後，GitHub Actions 會執行匯入測試並自動將 `dist/` 發布至 GitHub Pages；亦可從 Actions 手動執行發布。儲存庫的 Settings → Pages → Source 須設為 GitHub Actions。
+
 在本目錄執行 `node serve.mjs`，開啟 http://127.0.0.1:4173 。正式環境可將 `dist/` 部署於 HTTPS 靜態網站或既有系統的獨立路徑。Leaflet、shpjs 6.1.0、fflate 0.8.2、html2canvas 1.4.1 已固定版本存於 `dist/vendor/`；底圖需要對外網路。字型服務無法連線時自動使用系統字型。
 
 ## 地圖圖片匯出
