@@ -68,8 +68,9 @@ function updateSymbology(){
  if(typeof resetExportPreview==='function')resetExportPreview();
 }
 function renderSymbolGroups(){
- const container=$('symbol-groups');container.replaceChildren();const groups=symbolGroups();
- $('symbol-summary').textContent=`共 ${groups.length.toLocaleString()} 群 · ${dataset.features.length.toLocaleString()} 筆地籍`;
+ const container=$('symbol-groups');container.replaceChildren();const groups=symbolGroups(filtered);
+ $('symbol-summary').textContent=`共 ${groups.length.toLocaleString()} 群 · ${filtered.length.toLocaleString()} 筆地籍`;
+ if(!groups.length){const hint=document.createElement('p');hint.className='hint';hint.textContent='目前沒有符合查詢條件的地籍，請調整查詢條件。';container.append(hint);}
  for(const [name,count] of groups){
   const row=document.createElement('label');row.className='symbol-group';
   const picker=document.createElement('input');picker.type='color';picker.value=symbolSchemes.get(symbolField).get(name);picker.setAttribute('aria-label',`${name}的顏色`);
@@ -84,7 +85,7 @@ function initializeSymbology(){
  for(const [key,label] of Object.entries(fields))if(mapping[key]||key==='usage')select.add(new Option(label,`field:${key}`));
  const columns=[...new Set(dataset.features.flatMap(feature=>Object.keys(feature.properties||{})))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
  const raw=document.createElement('optgroup');raw.label='原始屬性欄位';for(const column of columns)raw.append(new Option(column,`raw:${column}`));select.append(raw);select.value=symbolField;
- ensureSymbolColors();renderSymbolGroups();
+ ensureSymbolColors();
 }
 $('symbol-field').onchange=()=>{symbolField=$('symbol-field').value;ensureSymbolColors();renderSymbolGroups();updateSymbology();};
 $('symbol-reset').onclick=()=>{symbolSchemes.delete(symbolField);ensureSymbolColors();renderSymbolGroups();updateSymbology();};
@@ -112,7 +113,7 @@ function applySearch(){
  const keyword=$('keyword').value.trim().toLocaleLowerCase();
  filtered=dataset.features.filter(f=>['city','district','section','usage'].every(k=>!$(k).value||String(value(f,k))===$(k).value)&&(!keyword||Object.values(f.properties||{}).some(v=>displayValue(v).toLocaleLowerCase().includes(keyword))));
  if(selected&&!filtered.includes(selected)){selected=null;$('details').hidden=true;}
- parcelGroup.clearLayers().addData({type:'FeatureCollection',features:filtered});setLabels();renderResults();renderLegend();
+ parcelGroup.clearLayers().addData({type:'FeatureCollection',features:filtered});setLabels();renderResults();renderLegend();renderSymbolGroups();
  $('result-count').textContent=filtered.length.toLocaleString();$('visible-count').textContent=filtered.length.toLocaleString();$('table-count').textContent=`${filtered.length.toLocaleString()} 筆`;
 }
 function renderResults(){
