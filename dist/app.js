@@ -48,8 +48,6 @@ function parcelStyle(feature){return {color:feature===selected?'#193f38':usageCo
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 function loadDataset(data,newMapping,isTest,label){
  dataset=data;mapping=newMapping;testDataset=isTest;selected=null;$('details').hidden=true;importLabel=label;
- $('source-label').textContent=isTest?'目前顯示測試資料':'已匯入地籍資料';
- $('source-description').textContent=`${data.features.length.toLocaleString()} 筆地籍 · ${label}`;
  $('map-source').textContent=isTest?'測試資料':'本機匯入';
  $('dataset-status').textContent=isTest?'EDU_LAND · 內建測試圖層':`${label} · 重新整理即還原測試圖層`;
  ['city','district','section','usage','keyword'].forEach(k=>$(k).value='');populateSelect('city',data.features);updateDistrict();populateSelect('usage',data.features);applySearch();
