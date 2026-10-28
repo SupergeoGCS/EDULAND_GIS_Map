@@ -57,20 +57,21 @@ function buildMapReport(mapCanvas,scale,snapshot){
  ctx.font=`600 19px ${font}`;
  const titleLines=wrapExportText(ctx,snapshot.title,width-pad*2);
  const headerHeight=24+titleLines.length*27;
- const legend=map.hasLayer(parcelGroup)?[...new Set(filtered.map(feature=>displayValue(value(feature,'usage'))))]:[];
+ const legend=map.hasLayer(parcelGroup)?symbolGroups(filtered).map(([name])=>({name,color:symbolSchemes.get(symbolField).get(name)})):[];
  const layerNames=overlayRegistry.filter(entry=>map.hasLayer(entry.layer)).map(entry=>entry.name);
  const bounds=snapshot.bounds;
  const metadata=[
   `底圖：${baseNames[snapshot.base]}${layerNames.length?'｜套疊：'+layerNames.join('、'):''}`,
-  `地籍：${map.hasLayer(parcelGroup)?importLabel:'未顯示'}${legend.length?'｜使用情形圖例：'+legend.join('、'):''}`,
+  `地籍：${map.hasLayer(parcelGroup)?importLabel:'未顯示'}${legend.length?'｜分群欄位：'+symbolTitle():''}`,
   ...[...parcelBuffers.values()].filter(entry=>map.hasLayer(entry.layer)).map(entry=>`環域分析：${[value(entry.feature,'city'),value(entry.feature,'district'),value(entry.feature,'section'),value(entry.feature,'parcel')].filter(Boolean).join(' / ')}，以地籍外框中心為圓心，半徑 ${entry.radius.toLocaleString('zh-TW')} 公尺（淡黃色虛線）。`),
   `範圍（WGS84）：西 ${bounds.getWest().toFixed(6)}°、南 ${bounds.getSouth().toFixed(6)}°、東 ${bounds.getEast().toFixed(6)}°、北 ${bounds.getNorth().toFixed(6)}°`,
   `製圖時間：${snapshot.time}（臺灣時間）｜${testDataset?'測試資料，未與最新土地登記資料核驗。':'依匯入資料製圖，未與正式登記資料核驗。'}`,
   `圖資來源：${snapshot.attribution}`
  ];
  ctx.font=`11px ${font}`;
+ const legendLines=legend.flatMap(entry=>wrapExportText(ctx,entry.name,width-pad*2-22).map((text,index)=>({text,color:index===0?entry.color:null})));
  const metadataLines=metadata.flatMap(text=>wrapExportText(ctx,text,width-pad*2));
- const footerHeight=26+metadataLines.length*19;
+ const footerHeight=26+(metadataLines.length+legendLines.length)*19;
  canvas.width=Math.round(width*scale);canvas.height=Math.round((headerHeight+height+footerHeight)*scale);
  const output=canvas.getContext('2d');output.scale(scale,scale);output.fillStyle='#ffffff';output.fillRect(0,0,width,canvas.height/scale);
  output.fillStyle='#244d3e';output.font=`600 19px ${font}`;output.textBaseline='top';
@@ -78,6 +79,7 @@ function buildMapReport(mapCanvas,scale,snapshot){
  output.drawImage(mapCanvas,0,headerHeight,width,height);
  output.strokeStyle='#dae5dd';output.lineWidth=1;output.strokeRect(.5,headerHeight+.5,width-1,height-1);
  output.font=`11px ${font}`;output.fillStyle='#5b7062';metadataLines.forEach((line,index)=>output.fillText(line,pad,headerHeight+height+14+index*19));
+ legendLines.forEach((line,index)=>{const y=headerHeight+height+14+(metadataLines.length+index)*19;if(line.color){output.fillStyle=line.color;output.fillRect(pad,y+1,11,11);}output.fillStyle='#5b7062';output.fillText(line.text,pad+22,y);});
  return canvas;
 }
 exportConfirm.onclick=async()=>{

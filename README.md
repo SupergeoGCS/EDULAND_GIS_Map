@@ -70,3 +70,5 @@ window.MOEGIS.loadGeoJSON(featureCollection, {
 - html2canvas：https://html2canvas.hertzen.com/ （MIT）
 
 第三方原始授權檔保留於 `dist/vendor/`。參考手冊只作功能需求來源，未納入網站公開內容。
+
+自訂圖徵為左側導覽列的獨立功能：依對應欄位或原始屬性值分類，各群可獨立選色與重設。設定以整份地籍資料為基礎，查詢篩選及切換欄位時保留，替換資料或重新整理時還原。地圖填色與外框同步套用，選取地籍仍以深色外框標示；PNG 匯出包含分群欄位及完整色塊圖例。

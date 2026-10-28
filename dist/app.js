@@ -5,6 +5,9 @@ const displayValue = value => value === null || value === undefined || value ===
 const fields = {city:'縣市',district:'鄉鎮市區',section:'地段',parcel:'地號',area:'登記面積',usage:'使用情形',manager:'管理單位',zone:'使用分區',category:'使用地類別',owner:'所有權人',propertyId:'財產編號'};
 const aliases = {city:['縣市','縣市名稱','COUNTYNAME','COUNTY','CITY'],district:['鄉鎮市區','鄉鎮區','TOWNNAME','TOWN','DISTRICT'],section:['地段','段名','地段名稱','SECTNAME','SECTION'],parcel:['地號','土地地號','LANDNO','LAND_NO','PARCEL'],area:['登記面積','面積','AREA','LAND_AREA'],usage:['使用情形','使用狀態','USE_TYPE','USAGE'],manager:['管理單位','管理機關','MANAGER'],zone:['使用分區','ZONE'],category:['使用地類別','CATEGORY'],owner:['所有權人','OWNER'],propertyId:['財產編號','PROPERTY_ID']};
 const colors = {'出租':'#bd934d','自用':'#3c9a7c','占用':'#c77465','未利用':'#738fb2','未提供':'#82968c'};
+const symbolPalette=['#3c9a7c','#bd934d','#738fb2','#c77465','#8e78ad','#4e9ba6','#a79062','#b97c9b'];
+let symbolField='field:usage';
+const symbolSchemes=new Map();
 const PARCEL_LABEL_MIN_ZOOM = 17;
 let dataset, filtered = [], mapping = {}, selected = null, testDataset = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
 let toastTimer, baseErrors = 0, tileTimer, importLabel = '';
@@ -47,11 +50,49 @@ function addOverlayControl(name,layer,subtitle='本機匯入 · 工作階段資�
 }
 function value(feature,key){const column=mapping[key];return column?feature.properties?.[column]:undefined;}
 function usageColor(feature){return colors[value(feature,'usage')]||'#7a9a89';}
-function parcelStyle(feature){return {color:feature===selected?'#193f38':usageColor(feature),weight:feature===selected?3.5:2,fillColor:usageColor(feature),fillOpacity:Number($('opacity').value)/100};}
+function symbolValue(feature){return displayValue(symbolField.startsWith('field:')?value(feature,symbolField.slice(6)):feature.properties?.[symbolField.slice(4)]);}
+function symbolTitle(){return $('symbol-field').selectedOptions[0]?.textContent||'使用情形';}
+function symbolGroups(features=dataset.features){
+ const groups=new Map();for(const feature of features){const name=symbolValue(feature);groups.set(name,(groups.get(name)||0)+1);}
+ return [...groups].sort((a,b)=>a[0].localeCompare(b[0],'zh-Hant'));
+}
+function ensureSymbolColors(){
+ if(!symbolSchemes.has(symbolField))symbolSchemes.set(symbolField,new Map());
+ const scheme=symbolSchemes.get(symbolField);
+ symbolGroups().forEach(([name],index)=>{if(!scheme.has(name))scheme.set(name,symbolField==='field:usage'?(colors[name]||'#7a9a89'):symbolPalette[index%symbolPalette.length]);});
+}
+function symbolColor(feature){return symbolSchemes.get(symbolField)?.get(symbolValue(feature))||'#7a9a89';}
+function parcelStyle(feature){return {color:feature===selected?'#193f38':symbolColor(feature),weight:feature===selected?3.5:2,fillColor:symbolColor(feature),fillOpacity:Number($('opacity').value)/100};}
+function updateSymbology(){
+ parcelGroup.setStyle(parcelStyle);renderLegend();
+ if(typeof resetExportPreview==='function')resetExportPreview();
+}
+function renderSymbolGroups(){
+ const container=$('symbol-groups');container.replaceChildren();const groups=symbolGroups();
+ $('symbol-summary').textContent=`共 ${groups.length.toLocaleString()} 群 · ${dataset.features.length.toLocaleString()} 筆地籍`;
+ for(const [name,count] of groups){
+  const row=document.createElement('label');row.className='symbol-group';
+  const picker=document.createElement('input');picker.type='color';picker.value=symbolSchemes.get(symbolField).get(name);picker.setAttribute('aria-label',`${name}的顏色`);
+  const text=document.createElement('span'),title=document.createElement('b'),small=document.createElement('small');title.textContent=name;small.textContent=`${count.toLocaleString()} 筆`;text.append(title,small);
+  const hex=document.createElement('code');hex.textContent=picker.value;
+  picker.oninput=()=>{symbolSchemes.get(symbolField).set(name,picker.value);hex.textContent=picker.value;updateSymbology();};
+  row.append(picker,text,hex);container.append(row);
+ }
+}
+function initializeSymbology(){
+ symbolSchemes.clear();symbolField='field:usage';const select=$('symbol-field');select.replaceChildren();
+ for(const [key,label] of Object.entries(fields))if(mapping[key]||key==='usage')select.add(new Option(label,`field:${key}`));
+ const columns=[...new Set(dataset.features.flatMap(feature=>Object.keys(feature.properties||{})))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+ const raw=document.createElement('optgroup');raw.label='原始屬性欄位';for(const column of columns)raw.append(new Option(column,`raw:${column}`));select.append(raw);select.value=symbolField;
+ ensureSymbolColors();renderSymbolGroups();
+}
+$('symbol-field').onchange=()=>{symbolField=$('symbol-field').value;ensureSymbolColors();renderSymbolGroups();updateSymbology();};
+$('symbol-reset').onclick=()=>{symbolSchemes.delete(symbolField);ensureSymbolColors();renderSymbolGroups();updateSymbology();};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 function loadDataset(data,newMapping,isTest,label){
  clearAllParcelBuffers();
  dataset=data;mapping=newMapping;testDataset=isTest;selected=null;$('details').hidden=true;importLabel=label;
+ initializeSymbology();
  $('map-source').textContent=isTest?'測試資料':'本機匯入';
  $('dataset-status').textContent=isTest?'EDU_LAND · 內建測試圖層':`${label} · 重新整理即還原測試圖層`;
  ['city','district','section','usage','keyword'].forEach(k=>$(k).value='');populateSelect('city',data.features);updateDistrict();populateSelect('usage',data.features);applySearch();
@@ -88,7 +129,8 @@ function renderResults(){
  if(filtered.length>250){const p=document.createElement('p');p.className='hint';p.textContent='清單顯示前 250 筆；地圖及匯出包含全部查詢結果，請縮小條件。';$('results').append(p);}
 }
 function renderLegend(){
- const unique=[...new Set(filtered.map(f=>displayValue(value(f,'usage'))))];const html=unique.map(v=>`<div class="legend-row"><i class="legend-dot" style="background:${colors[v]||'#7a9a89'}"></i>${escapeHTML(v)}</div>`).join('');
+ const unique=symbolGroups(filtered);const html=unique.map(([v])=>`<div class="legend-row"><i class="legend-dot" style="background:${symbolSchemes.get(symbolField).get(v)}"></i>${escapeHTML(v)}</div>`).join('');
+ $('legend-title').textContent=symbolTitle();$('legend-sidebar-title').textContent=`${symbolTitle()}圖例`;
  $('legend').innerHTML=html;$('legend-sidebar').innerHTML=html;
 }
 function setLabels(){
@@ -202,7 +244,7 @@ $('search-toggle').onclick=()=>{
 $('search-form').onsubmit=e=>{e.preventDefault();applySearch();fitResults();};$('fit-results').onclick=fitResults;
 $('reset').onclick=()=>{['city','district','section','keyword','usage'].forEach(k=>$(k).value='');updateDistrict();applySearch();fitResults();};
 $('close-details').onclick=()=>{selected=null;$('details').hidden=true;parcelGroup.setStyle(parcelStyle);renderResults();};
-document.querySelectorAll('[data-panel]').forEach(button=>button.onclick=()=>{const id=button.dataset.panel;document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b===button));$('query-panel').hidden=id!=='query';$('layers-panel').hidden=id!=='layers';if(innerWidth<601)$('sidebar').scrollIntoView({behavior:'smooth',block:'start'});});
+document.querySelectorAll('[data-panel]').forEach(button=>button.onclick=()=>{const id=button.dataset.panel;document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b===button));for(const name of ['query','layers','symbology'])$(name+'-panel').hidden=id!==name;if(innerWidth<601)$('sidebar').scrollIntoView({behavior:'smooth',block:'start'});});
 document.querySelectorAll('[data-base]').forEach(button=>button.onclick=()=>{map.removeLayer(bases[activeBase]);activeBase=button.dataset.base;bases[activeBase].addTo(map);baseErrors=0;clearTimeout(tileTimer);$('base-status').textContent=`底圖：${baseNames[activeBase]}`;document.querySelectorAll('[data-base]').forEach(b=>b.classList.toggle('selected',b===button));});
 $('parcels-toggle').onchange=e=>e.target.checked?parcelGroup.addTo(map):map.removeLayer(parcelGroup);
 $('labels-toggle').onchange=setLabels;$('opacity').oninput=()=>{$('opacity-value').value=`${$('opacity').value}%`;parcelGroup.setStyle(parcelStyle);};
