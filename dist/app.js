@@ -5,7 +5,7 @@ const displayValue = value => value === null || value === undefined || value ===
 const fields = {city:'縣市',district:'鄉鎮市區',section:'地段',parcel:'地號',area:'登記面積',usage:'使用情形',manager:'管理單位',zone:'使用分區',category:'使用地類別',owner:'所有權人',propertyId:'財產編號'};
 const aliases = {city:['縣市','縣市名稱','COUNTYNAME','COUNTY','CITY'],district:['鄉鎮市區','鄉鎮區','TOWNNAME','TOWN','DISTRICT'],section:['地段','段名','地段名稱','SECTNAME','SECTION'],parcel:['地號','土地地號','LANDNO','LAND_NO','PARCEL'],area:['登記面積','面積','AREA','LAND_AREA'],usage:['使用情形','使用狀態','USE_TYPE','USAGE'],manager:['管理單位','管理機關','MANAGER'],zone:['使用分區','ZONE'],category:['使用地類別','CATEGORY'],owner:['所有權人','OWNER'],propertyId:['財產編號','PROPERTY_ID']};
 const colors = {'出租':'#bd934d','自用':'#3c9a7c','占用':'#c77465','未利用':'#738fb2','未提供':'#82968c'};
-let dataset, filtered = [], mapping = {}, selected = null, demo = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
+let dataset, filtered = [], mapping = {}, selected = null, testDataset = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
 let toastTimer, baseErrors = 0, tileTimer, importLabel = '';
 const map = L.map('map',{zoomControl:false,minZoom:6,maxZoom:22,preferCanvas:true}).setView([25.0318,121.5172],16);
 L.control.scale({imperial:false,position:'bottomleft'}).addTo(map);
@@ -43,21 +43,13 @@ function value(feature,key){const column=mapping[key];return column?feature.prop
 function usageColor(feature){return colors[value(feature,'usage')]||'#7a9a89';}
 function parcelStyle(feature){return {color:feature===selected?'#193f38':usageColor(feature),weight:feature===selected?3.5:2,fillColor:usageColor(feature),fillOpacity:Number($('opacity').value)/100};}
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
-function demoData(){
- const features=[];const uses=['自用','出租','未利用','自用','占用','出租','自用','未利用'];
- for(let i=0;i<8;i++){
-  const x=121.5128+(i%4)*.0028,y=25.0340-Math.floor(i/4)*.0034;
-  features.push({type:'Feature',properties:{'縣市':'臺北市','鄉鎮市區':'中正區','地段':'示範段','地號':`${String(120+i*11).padStart(4,'0')}-0000`,'登記面積':[1635,2080,1850,3250,1420,2760,1940,2340][i],'使用情形':uses[i],'管理單位':'教育部（示範）','使用分區':'示範使用分區','使用地類別':'示範類別','所有權人':'中華民國（示範）','財產編號':`DEMO-${String(i+1).padStart(3,'0')}`,'資料說明':'虛構圖形及屬性，非實際學產範圍或登記資料'},geometry:{type:'Polygon',coordinates:[[[x,y],[x+.0016,y+.00015],[x+.0018,y-.00115],[x+.00015,y-.00135],[x,y]]]}});
- }
- return {type:'FeatureCollection',features};
-}
-function loadDataset(data,newMapping,isDemo,label){
- dataset=data;mapping=newMapping;demo=isDemo;selected=null;$('details').hidden=true;importLabel=label;
- $('source-label').textContent=isDemo?'目前顯示示範資料':'已匯入地籍資料';
- $('source-description').textContent=isDemo?'8 筆虛構地籍，僅供功能展示':`${data.features.length.toLocaleString()} 筆地籍 · ${label}`;
- $('map-source').textContent=isDemo?'示範資料':'本機匯入';
- $('dataset-status').textContent=isDemo?'示範圖層 · 瀏覽器工作階段':`${label} · 重新整理即清除`;
- $('keyword').value='';populateSelect('city',data.features);updateDistrict();populateSelect('usage',data.features);applySearch();
+function loadDataset(data,newMapping,isTest,label){
+ dataset=data;mapping=newMapping;testDataset=isTest;selected=null;$('details').hidden=true;importLabel=label;
+ $('source-label').textContent=isTest?'目前顯示測試資料':'已匯入地籍資料';
+ $('source-description').textContent=`${data.features.length.toLocaleString()} 筆地籍 · ${label}`;
+ $('map-source').textContent=isTest?'測試資料':'本機匯入';
+ $('dataset-status').textContent=isTest?'EDU_LAND · 內建測試圖層':`${label} · 重新整理即還原測試圖層`;
+ ['city','district','section','usage','keyword'].forEach(k=>$(k).value='');populateSelect('city',data.features);updateDistrict();populateSelect('usage',data.features);applySearch();
  $('parcels-toggle').checked=true;if(!map.hasLayer(parcelGroup))parcelGroup.addTo(map);fitResults();
 }
 function populateSelect(id,features){
@@ -114,7 +106,7 @@ function selectFeature(feature){
  }
  const raw=document.createElement('details');raw.className='raw-details';const summary=document.createElement('summary');summary.textContent='查看全部原始屬性';raw.append(summary);const rawList=document.createElement('dl');rawList.className='property-list';
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
- const hint=document.createElement('p');hint.className='hint';hint.textContent=demo?'此為虛構展示資料，非正式土地登記資料。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
+ const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
 }
 $('search-form').onsubmit=e=>{e.preventDefault();applySearch();fitResults();};$('fit-results').onclick=fitResults;
 $('reset').onclick=()=>{['city','district','section','keyword','usage'].forEach(k=>$(k).value='');updateDistrict();applySearch();fitResults();};
@@ -134,7 +126,7 @@ $('table-toggle').onclick=()=>toggleTable($('table-panel').hidden);$('close-tabl
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 function openImport(){if(document.fullscreenElement)document.exitFullscreen();$('import-dialog').showModal();}
 $('import-button').onclick=openImport;$('import-nav').onclick=openImport;
-$('download').onclick=()=>{if(!filtered.length){toast('沒有可匯出的查詢結果。');return;}const data={type:'FeatureCollection',name:demo?'虛構示範地籍':importLabel,features:filtered};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/geo+json;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`${demo?'示範':'匯入'}地籍查詢結果.geojson`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('download').onclick=()=>{if(!filtered.length){toast('沒有可匯出的查詢結果。');return;}const data={type:'FeatureCollection',name:importLabel,features:filtered};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/geo+json;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`${testDataset?'測試':'匯入'}地籍查詢結果.geojson`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 function pickFiles(files){pickedFiles=[...files];$('import-status').classList.remove('import-error');$('import-status').textContent=pickedFiles.map(f=>f.name).join('、');$('import-confirm').disabled=!pickedFiles.length||busy;}
 $('files').onchange=e=>pickFiles(e.target.files);$('dropzone').ondragover=e=>{e.preventDefault();};$('dropzone').ondrop=e=>{e.preventDefault();pickFiles(e.dataTransfer.files);};
 function normalizeData(input,polygonOnly=true){
@@ -171,6 +163,7 @@ function showMapping(){
  $('import-dialog').close();$('mapping-dialog').showModal();
 }
 $('apply-mapping').onclick=()=>{const mapped=Object.fromEntries([...document.querySelectorAll('[data-field]')].map(s=>[s.dataset.field,s.value]));loadDataset(pending.data,mapped,false,pending.name);$('mapping-dialog').close();toast('地籍已加入地圖，可開始查詢與檢視屬性。');pending=null;};
-$('load-demo').onclick=()=>{loadDataset(demoData(),Object.fromEntries(Object.entries(fields).map(([key,label])=>[key,label])),true,'示範地籍');$('import-dialog').close();toast('已還原虛構示範地籍。');};
-loadDataset(demoData(),Object.fromEntries(Object.entries(fields).map(([key,label])=>[key,label])),true,'示範地籍');
+function loadTestDataset(){const initial=window.EDU_LAND_TEST;loadDataset(normalizeData(structuredClone(initial.data)),initial.mapping,true,initial.name);}
+$('load-demo').onclick=()=>{loadTestDataset();$('import-dialog').close();toast('已還原 EDU_LAND 測試地籍。');};
+loadTestDataset();
 window.MOEGIS={loadGeoJSON:(geojson,fieldMapping)=>loadDataset(normalizeData(geojson),fieldMapping||{},false,'API 載入資料'),getFiltered:()=>structuredClone({type:'FeatureCollection',features:filtered}),map};
