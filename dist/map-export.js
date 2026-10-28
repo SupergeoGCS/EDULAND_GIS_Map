@@ -63,7 +63,7 @@ function buildMapReport(mapCanvas,scale,snapshot){
  const metadata=[
   `底圖：${baseNames[snapshot.base]}${layerNames.length?'｜套疊：'+layerNames.join('、'):''}`,
   `地籍：${map.hasLayer(parcelGroup)?importLabel:'未顯示'}${legend.length?'｜使用情形圖例：'+legend.join('、'):''}`,
-  ...(bufferAnalysis&&map.hasLayer(bufferAnalysis.layer)?[`環域分析：${displayValue(value(bufferAnalysis.feature,'parcel'))}，以地籍外框中心為圓心，半徑 ${bufferAnalysis.radius.toLocaleString('zh-TW')} 公尺（淡黃色虛線）。`]:[]),
+  ...[...parcelBuffers.values()].filter(entry=>map.hasLayer(entry.layer)).map(entry=>`環域分析：${[value(entry.feature,'city'),value(entry.feature,'district'),value(entry.feature,'section'),value(entry.feature,'parcel')].filter(Boolean).join(' / ')}，以地籍外框中心為圓心，半徑 ${entry.radius.toLocaleString('zh-TW')} 公尺（淡黃色虛線）。`),
   `範圍（WGS84）：西 ${bounds.getWest().toFixed(6)}°、南 ${bounds.getSouth().toFixed(6)}°、東 ${bounds.getEast().toFixed(6)}°、北 ${bounds.getNorth().toFixed(6)}°`,
   `製圖時間：${snapshot.time}（臺灣時間）｜${testDataset?'測試資料，未與最新土地登記資料核驗。':'依匯入資料製圖，未與正式登記資料核驗。'}`,
   `圖資來源：${snapshot.attribution}`
