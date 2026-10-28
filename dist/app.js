@@ -8,6 +8,7 @@ const colors = {'出租':'#bd934d','自用':'#3c9a7c','占用':'#c77465','未利
 const PARCEL_LABEL_MIN_ZOOM = 17;
 let dataset, filtered = [], mapping = {}, selected = null, testDataset = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
 let toastTimer, baseErrors = 0, tileTimer, importLabel = '';
+let bufferAnalysis = null, bufferRadius = 100;
 const map = L.map('map',{zoomControl:false,minZoom:6,maxZoom:22,preferCanvas:true}).setView([25.0318,121.5172],16);
 L.control.scale({imperial:false,position:'bottomleft'}).addTo(map);
 const nlsc = code => `https://wmts.nlsc.gov.tw/wmts/${code}/default/GoogleMapsCompatible/{z}/{y}/{x}`;
@@ -29,6 +30,7 @@ const parcelGroup = L.geoJSON(null,{style:feature=>parcelStyle(feature),onEachFe
 }}).addTo(map);
 parcelGroup.on('add remove',setLabels);
 const labelPane = map.createPane('reference');labelPane.style.zIndex=350;
+const bufferPane = map.createPane('parcel-buffer');bufferPane.style.zIndex=450;bufferPane.style.pointerEvents='none';
 const overlayRegistry = [];
 const overlayDefinitions = [['LANDSECT','地段外圍圖',18],['LUIMAP','國土利用現況調查成果圖',18],['CITY','縣市界',17],['TOWN','鄉鎮區界',17],['Village','村里界',19],['SCHOOL','各級學校範圍',19]];
 for(const [code,name,max] of overlayDefinitions){
@@ -47,6 +49,7 @@ function usageColor(feature){return colors[value(feature,'usage')]||'#7a9a89';}
 function parcelStyle(feature){return {color:feature===selected?'#193f38':usageColor(feature),weight:feature===selected?3.5:2,fillColor:usageColor(feature),fillOpacity:Number($('opacity').value)/100};}
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 function loadDataset(data,newMapping,isTest,label){
+ clearParcelBuffer();
  dataset=data;mapping=newMapping;testDataset=isTest;selected=null;$('details').hidden=true;importLabel=label;
  $('map-source').textContent=isTest?'測試資料':'本機匯入';
  $('dataset-status').textContent=isTest?'EDU_LAND · 內建測試圖層':`${label} · 重新整理即還原測試圖層`;
@@ -66,6 +69,7 @@ function applySearch(){
  updateSearchSummary();
  const keyword=$('keyword').value.trim().toLocaleLowerCase();
  filtered=dataset.features.filter(f=>['city','district','section','usage'].every(k=>!$(k).value||String(value(f,k))===$(k).value)&&(!keyword||Object.values(f.properties||{}).some(v=>displayValue(v).toLocaleLowerCase().includes(keyword))));
+ if(bufferAnalysis&&!filtered.includes(bufferAnalysis.feature))clearParcelBuffer();
  if(selected&&!filtered.includes(selected)){selected=null;$('details').hidden=true;}
  parcelGroup.clearLayers().addData({type:'FeatureCollection',features:filtered});setLabels();renderResults();renderLegend();
  $('result-count').textContent=filtered.length.toLocaleString();$('visible-count').textContent=filtered.length.toLocaleString();$('table-count').textContent=`${filtered.length.toLocaleString()} 筆`;
@@ -96,12 +100,14 @@ function setLabels(){
 }
 function fitResults(){if(filtered.length){const bounds=parcelGroup.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[55,55],maxZoom:17});}else toast('目前沒有可定位的查詢結果。');}
 function selectFeature(feature){
+ if(bufferAnalysis&&bufferAnalysis.feature!==feature)clearParcelBuffer();
  let parcelCenter;
  selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelCenter=layer.getBounds().getCenter();layer.bringToFront();map.fitBounds(layer.getBounds(),{paddingTopLeft:[35,70],paddingBottomRight:[Math.min(390,map.getSize().x*.45),45],maxZoom:18});}});
  const content=$('detail-content');content.replaceChildren();
  const heading=document.createElement('h2');heading.textContent=displayValue(value(feature,'parcel'));content.append(heading);
  const loc=document.createElement('p');loc.className='detail-location';loc.textContent=[value(feature,'city'),value(feature,'district'),value(feature,'section')].filter(Boolean).join(' / ')||'未提供位置資訊';content.append(loc);
  const badge=document.createElement('span');badge.className='usage-badge';badge.textContent=displayValue(value(feature,'usage'));content.append(badge);
+ if(parcelCenter)addBufferControls(content,feature,parcelCenter);
  const tab=document.createElement('div');tab.className='detail-tabs';tab.textContent='土地標示部';content.append(tab);
  const list=document.createElement('dl');list.className='property-list';
  for(const key of ['city','district','section','parcel','zone','category','owner','manager','propertyId']){const row=document.createElement('div');const dt=document.createElement('dt');dt.textContent=fields[key];const dd=document.createElement('dd');dd.textContent=displayValue(value(feature,key));row.append(dt,dd);list.append(row);}content.append(list);
@@ -116,6 +122,31 @@ function selectFeature(feature){
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
  const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
 }
+function clearParcelBuffer(){
+ if(bufferAnalysis){map.removeLayer(bufferAnalysis.layer);bufferAnalysis=null;}
+ $('buffer-map-status').hidden=true;
+ if($('buffer-analysis-status'))$('buffer-analysis-status').textContent='尚未建立環域範圍';
+}
+function setParcelBuffer(feature,center,radius){
+ if(!Number.isFinite(radius)||radius<1||radius>100000)throw Error('請輸入 1 至 100,000 公尺的半徑。');
+ clearParcelBuffer();bufferRadius=radius;
+ const layer=L.circle(center,{radius,pane:'parcel-buffer',color:'#e4c64e',weight:2.5,dashArray:'8 6',fillColor:'#fff2a8',fillOpacity:.14,interactive:false}).addTo(map);
+ bufferAnalysis={feature,center,radius,layer};
+ const description=`${displayValue(value(feature,'parcel'))} · 半徑 ${radius.toLocaleString('zh-TW',{maximumFractionDigits:3})} 公尺`;
+ $('buffer-map-text').textContent=`環域：${description}`;$('buffer-map-status').hidden=false;
+ if($('buffer-analysis-status'))$('buffer-analysis-status').textContent=`已建立半徑 ${radius.toLocaleString('zh-TW',{maximumFractionDigits:3})} 公尺環域`;
+ map.fitBounds(layer.getBounds(),{paddingTopLeft:[35,110],paddingBottomRight:[Math.min(390,map.getSize().x*.45),50],maxZoom:18});
+}
+function addBufferControls(content,feature,center){
+ const form=document.createElement('form');form.className='buffer-analysis';
+ form.innerHTML='<h3>環域分析</h3><label for="buffer-radius">半徑（公尺）</label><div class="buffer-input-row"><input id="buffer-radius" type="number" min="1" max="100000" step="any" required inputmode="decimal" aria-describedby="buffer-explanation"><button type="submit" class="primary">建立／更新</button></div><div class="buffer-actions"><span id="buffer-analysis-status" role="status"></span><button type="button" class="text-button" id="buffer-clear">清除</button></div><p id="buffer-explanation">以地籍外框中心為圓心，半徑範圍 1–100,000 公尺。</p>';
+ const input=form.querySelector('#buffer-radius');input.value=bufferAnalysis?.feature===feature?bufferAnalysis.radius:bufferRadius;
+ form.querySelector('#buffer-analysis-status').textContent=bufferAnalysis?.feature===feature?`已建立半徑 ${bufferAnalysis.radius.toLocaleString('zh-TW')} 公尺環域`:'尚未建立環域範圍';
+ input.oninput=()=>input.setCustomValidity('');
+ form.onsubmit=event=>{event.preventDefault();try{setParcelBuffer(feature,center,input.valueAsNumber);}catch(error){input.setCustomValidity(error.message);input.reportValidity();}};
+ form.querySelector('#buffer-clear').onclick=clearParcelBuffer;content.append(form);
+}
+$('buffer-map-clear').onclick=clearParcelBuffer;
 function updateSearchSummary(){
  const parts=['city','district','section','usage'].map(key=>$(key).value).filter(Boolean);
  if($('keyword').value.trim())parts.push(`關鍵字：${$('keyword').value.trim()}`);
