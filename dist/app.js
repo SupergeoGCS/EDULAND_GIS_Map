@@ -99,9 +99,26 @@ function setLabels(){
  });
 }
 function fitResults(){if(filtered.length){const bounds=parcelGroup.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[55,55],maxZoom:17});}else toast('目前沒有可定位的查詢結果。');}
+function revealParcel(bounds){
+ map.stop();
+ const size=map.getSize(),zoom=map.getZoom();
+ const mapRect=$('map').getBoundingClientRect(),detailRect=$('details').getBoundingClientRect();
+ const left=35,top=Math.min(70,size.y*.2);
+ const detailEdge=detailRect.left-mapRect.left-20;
+ const right=detailEdge>left+80?Math.min(size.x-35,detailEdge):size.x-Math.min(390,size.x*.45);
+ const bottom=Math.max(top+1,size.y-($('table-panel').hidden?45:255));
+ const nw=map.latLngToContainerPoint(bounds.getNorthWest()),se=map.latLngToContainerPoint(bounds.getSouthEast());
+ if(se.x-nw.x>right-left||se.y-nw.y>bottom-top){
+  map.fitBounds(bounds,{paddingTopLeft:[left,top],paddingBottomRight:[size.x-right,size.y-bottom],maxZoom:zoom});
+  return;
+ }
+ const dx=nw.x<left?nw.x-left:se.x>right?se.x-right:0;
+ const dy=nw.y<top?nw.y-top:se.y>bottom?se.y-bottom:0;
+ if(dx||dy)map.panBy([dx,dy]);
+}
 function selectFeature(feature){
- let parcelCenter;
- selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelCenter=layer.getBounds().getCenter();layer.bringToFront();map.fitBounds(layer.getBounds(),{paddingTopLeft:[35,70],paddingBottomRight:[Math.min(390,map.getSize().x*.45),45],maxZoom:18});}});
+ let parcelCenter,parcelBounds;
+ selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelBounds=layer.getBounds();parcelCenter=parcelBounds.getCenter();layer.bringToFront();}});
  const content=$('detail-content');content.replaceChildren();
  const heading=document.createElement('h2');heading.textContent=displayValue(value(feature,'parcel'));content.append(heading);
  const loc=document.createElement('p');loc.className='detail-location';loc.textContent=[value(feature,'city'),value(feature,'district'),value(feature,'section')].filter(Boolean).join(' / ')||'未提供位置資訊';content.append(loc);
@@ -119,7 +136,7 @@ function selectFeature(feature){
  }
  const raw=document.createElement('details');raw.className='raw-details';const summary=document.createElement('summary');summary.textContent='查看全部原始屬性';raw.append(summary);const rawList=document.createElement('dl');rawList.className='property-list';
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
- const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
+ const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();if(parcelBounds)revealParcel(parcelBounds);
 }
 function refreshBufferSummary(){
  const visible=[...parcelBuffers.values()].filter(entry=>map.hasLayer(entry.layer)).length;
