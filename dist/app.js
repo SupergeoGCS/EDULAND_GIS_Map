@@ -96,7 +96,8 @@ function renderLegend(){
 function setLabels(){parcelGroup.eachLayer(layer=>{if($('labels-toggle').checked)layer.openTooltip();else layer.closeTooltip();});}
 function fitResults(){if(filtered.length){const bounds=parcelGroup.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[55,55],maxZoom:17});}else toast('目前沒有可定位的查詢結果。');}
 function selectFeature(feature){
- selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){layer.bringToFront();map.fitBounds(layer.getBounds(),{paddingTopLeft:[35,70],paddingBottomRight:[Math.min(390,map.getSize().x*.45),45],maxZoom:18});}});
+ let parcelCenter;
+ selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelCenter=layer.getBounds().getCenter();layer.bringToFront();map.fitBounds(layer.getBounds(),{paddingTopLeft:[35,70],paddingBottomRight:[Math.min(390,map.getSize().x*.45),45],maxZoom:18});}});
  const content=$('detail-content');content.replaceChildren();
  const heading=document.createElement('h2');heading.textContent=displayValue(value(feature,'parcel'));content.append(heading);
  const loc=document.createElement('p');loc.className='detail-location';loc.textContent=[value(feature,'city'),value(feature,'district'),value(feature,'section')].filter(Boolean).join(' / ')||'未提供位置資訊';content.append(loc);
@@ -106,6 +107,11 @@ function selectFeature(feature){
  for(const key of ['city','district','section','parcel','zone','category','owner','manager','propertyId']){const row=document.createElement('div');const dt=document.createElement('dt');dt.textContent=fields[key];const dd=document.createElement('dd');dd.textContent=displayValue(value(feature,key));row.append(dt,dd);list.append(row);}content.append(list);
  const area=document.createElement('div');area.className='detail-area';const numeric=Number(value(feature,'area'));const formatted=value(feature,'area')!==undefined&&value(feature,'area')!==null&&value(feature,'area')!==''&&Number.isFinite(numeric)?numeric.toLocaleString('zh-TW',{maximumFractionDigits:2}):'未提供';
  area.innerHTML=`<span>登記面積</span><span><b>${escapeHTML(formatted)}</b> <small>m²</small></span>`;content.append(area);
+ if(parcelCenter){
+  const mapsLink=document.createElement('a');mapsLink.className='google-maps-link';
+  const mapsURL=new URL('https://www.google.com/maps/search/');mapsURL.searchParams.set('api','1');mapsURL.searchParams.set('query',`${parcelCenter.lat.toFixed(6)},${parcelCenter.lng.toFixed(6)}`);
+  mapsLink.href=mapsURL.href;mapsLink.target='_blank';mapsLink.rel='noopener noreferrer';mapsLink.referrerPolicy='no-referrer';mapsLink.textContent='在 Google 地圖查看 ↗';mapsLink.setAttribute('aria-label',`在 Google 地圖查看地籍 ${displayValue(value(feature,'parcel'))}（另開分頁）`);mapsLink.title='以地籍外框中心座標定位，另開分頁';content.append(mapsLink);
+ }
  const raw=document.createElement('details');raw.className='raw-details';const summary=document.createElement('summary');summary.textContent='查看全部原始屬性';raw.append(summary);const rawList=document.createElement('dl');rawList.className='property-list';
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
  const hint=document.createElement('p');hint.className='hint';hint.textContent=demo?'此為虛構展示資料，非正式土地登記資料。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();
