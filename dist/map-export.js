@@ -4,17 +4,25 @@ let exportInProgress = false;
 const exportDialog = $('export-dialog');
 const exportStatus = $('export-status');
 const exportConfirm = $('export-confirm');
+function resetExportPreview(){
+ if(exportInProgress)return;
+ if(exportImageURL)URL.revokeObjectURL(exportImageURL);exportImageURL=null;
+ $('export-preview').hidden=true;$('export-preview').removeAttribute('src');
+ $('export-again').hidden=true;$('export-again').removeAttribute('href');
+ exportConfirm.textContent='預覽';exportStatus.textContent='';exportStatus.classList.remove('import-error');
+}
 function exportMapSize(){
  const size=map.getSize(),scale=Number($('export-resolution').value);
  $('export-size').textContent=`地圖區域 ${Math.round(size.x*scale)} × ${Math.round(size.y*scale)} 像素，另附圖名及圖資說明。`;
 }
 $('export-map').onclick=async()=>{
  if(document.fullscreenElement)await document.exitFullscreen();
- map.stop();exportStatus.textContent='';exportStatus.classList.remove('import-error');
- $('export-preview').hidden=true;$('export-again').hidden=true;
+ map.stop();resetExportPreview();
  exportMapSize();exportDialog.showModal();
 };
-$('export-resolution').onchange=exportMapSize;
+$('export-resolution').onchange=()=>{resetExportPreview();exportMapSize();};
+$('export-title').oninput=resetExportPreview;
+map.on('moveend resize layeradd layerremove',()=>{if(exportDialog.open)resetExportPreview();});
 exportDialog.addEventListener('cancel',event=>{if(exportInProgress)event.preventDefault();});
 function imageIntersectsMap(image){
  const imageRect=image.getBoundingClientRect(),mapRect=$('map').getBoundingClientRect();
@@ -73,7 +81,8 @@ function buildMapReport(mapCanvas,scale,snapshot){
 }
 exportConfirm.onclick=async()=>{
  if(exportInProgress)return;
- exportInProgress=true;exportConfirm.disabled=true;
+ if(exportImageURL){$('export-again').click();exportStatus.textContent='已匯出 PNG 圖片，可再次點選匯出。';return;}
+ exportInProgress=true;exportConfirm.disabled=true;exportConfirm.textContent='產生預覽中…';
  exportDialog.querySelectorAll('[data-close],input,select').forEach(control=>control.disabled=true);
  exportStatus.classList.remove('import-error');exportStatus.textContent='正在等待圖磚並製作地圖圖片…';
  $('export-preview').hidden=true;$('export-again').hidden=true;
@@ -87,9 +96,9 @@ exportConfirm.onclick=async()=>{
   const canvas=buildMapReport(mapCanvas,scale,snapshot);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('圖片編碼失敗，請改用標準解析度重試。');
   if(exportImageURL)URL.revokeObjectURL(exportImageURL);exportImageURL=URL.createObjectURL(blob);
-  const link=$('export-again');link.href=exportImageURL;link.download=`${snapshot.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,70)}_${new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}.png`;link.hidden=false;
-  $('export-preview').src=exportImageURL;$('export-preview').hidden=false;
-  link.click();exportStatus.textContent=`PNG 圖片已產生（${canvas.width} × ${canvas.height} 像素）。若未自動下載，請點選「下載圖片」。`;
- }catch(error){exportStatus.classList.add('import-error');exportStatus.textContent=`匯出失敗：${error.message||'請檢查圖資連線或改用標準解析度。'}`;}
- finally{exportInProgress=false;exportConfirm.disabled=false;exportDialog.querySelectorAll('[data-close],input,select').forEach(control=>control.disabled=false);}
+  const link=$('export-again');link.href=exportImageURL;link.download=`${snapshot.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,70)}_${new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}.png`;
+  $('export-preview').src=exportImageURL;if($('export-preview').decode)await $('export-preview').decode();$('export-preview').hidden=false;
+  exportStatus.textContent=`預覽完成（${canvas.width} × ${canvas.height} 像素）。確認圖片後，請點選「匯出 PNG 圖片」。`;
+ }catch(error){if(exportImageURL)URL.revokeObjectURL(exportImageURL);exportImageURL=null;$('export-preview').hidden=true;exportStatus.classList.add('import-error');exportStatus.textContent=`預覽失敗：${error.message||'請檢查圖資連線或改用標準解析度。'}`;}
+ finally{exportInProgress=false;exportConfirm.disabled=false;exportConfirm.textContent=exportImageURL?'匯出 PNG 圖片':'預覽';exportDialog.querySelectorAll('[data-close],input,select').forEach(control=>control.disabled=false);}
 };
