@@ -5,6 +5,7 @@ const displayValue = value => value === null || value === undefined || value ===
 const fields = {city:'縣市',district:'鄉鎮市區',section:'地段',parcel:'地號',area:'登記面積',usage:'使用情形',manager:'管理單位',zone:'使用分區',category:'使用地類別',owner:'所有權人',propertyId:'財產編號'};
 const aliases = {city:['縣市','縣市名稱','COUNTYNAME','COUNTY','CITY'],district:['鄉鎮市區','鄉鎮區','TOWNNAME','TOWN','DISTRICT'],section:['地段','段名','地段名稱','SECTNAME','SECTION'],parcel:['地號','土地地號','LANDNO','LAND_NO','PARCEL'],area:['登記面積','面積','AREA','LAND_AREA'],usage:['使用情形','使用狀態','USE_TYPE','USAGE'],manager:['管理單位','管理機關','MANAGER'],zone:['使用分區','ZONE'],category:['使用地類別','CATEGORY'],owner:['所有權人','OWNER'],propertyId:['財產編號','PROPERTY_ID']};
 const colors = {'出租':'#bd934d','自用':'#3c9a7c','占用':'#c77465','未利用':'#738fb2','未提供':'#82968c'};
+const PARCEL_LABEL_MIN_ZOOM = 17;
 let dataset, filtered = [], mapping = {}, selected = null, testDataset = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
 let toastTimer, baseErrors = 0, tileTimer, importLabel = '';
 const map = L.map('map',{zoomControl:false,minZoom:6,maxZoom:22,preferCanvas:true}).setView([25.0318,121.5172],16);
@@ -25,8 +26,8 @@ const parcelGroup = L.geoJSON(null,{style:feature=>parcelStyle(feature),onEachFe
  layer.on('click',event=>{if(!measuring){L.DomEvent.stopPropagation(event);selectFeature(feature);}});
  layer.on('mouseover',()=>{if(feature!==selected)layer.setStyle({weight:3,fillOpacity:.5});});
  layer.on('mouseout',()=>layer.setStyle(parcelStyle(feature)));
- layer.bindTooltip(escapeHTML(value(feature,'parcel')||'未提供地號'),{permanent:true,direction:'center',className:'parcel-label'});
 }}).addTo(map);
+parcelGroup.on('add remove',setLabels);
 const labelPane = map.createPane('reference');labelPane.style.zIndex=350;
 const overlayRegistry = [];
 const overlayDefinitions = [['LANDSECT','地段外圍圖',18],['LUIMAP','國土利用現況調查成果圖',18],['CITY','縣市界',17],['TOWN','鄉鎮區界',17],['Village','村里界',19],['SCHOOL','各級學校範圍',19]];
@@ -87,7 +88,13 @@ function renderLegend(){
  const unique=[...new Set(filtered.map(f=>displayValue(value(f,'usage'))))];const html=unique.map(v=>`<div class="legend-row"><i class="legend-dot" style="background:${colors[v]||'#7a9a89'}"></i>${escapeHTML(v)}</div>`).join('');
  $('legend').innerHTML=html;$('legend-sidebar').innerHTML=html;
 }
-function setLabels(){parcelGroup.eachLayer(layer=>{if($('labels-toggle').checked)layer.openTooltip();else layer.closeTooltip();});}
+function setLabels(){
+ const show=$('labels-toggle').checked&&map.hasLayer(parcelGroup)&&map.getZoom()>=PARCEL_LABEL_MIN_ZOOM;
+ parcelGroup.eachLayer(layer=>{
+  if(show){if(!layer.getTooltip())layer.bindTooltip(escapeHTML(value(layer.feature,'parcel')||'未提供地號'),{permanent:true,direction:'center',className:'parcel-label'});layer.openTooltip();}
+  else layer.unbindTooltip();
+ });
+}
 function fitResults(){if(filtered.length){const bounds=parcelGroup.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[55,55],maxZoom:17});}else toast('目前沒有可定位的查詢結果。');}
 function selectFeature(feature){
  let parcelCenter;
@@ -118,7 +125,7 @@ document.querySelectorAll('[data-base]').forEach(button=>button.onclick=()=>{map
 $('parcels-toggle').onchange=e=>e.target.checked?parcelGroup.addTo(map):map.removeLayer(parcelGroup);
 $('labels-toggle').onchange=setLabels;$('opacity').oninput=()=>{$('opacity-value').value=`${$('opacity').value}%`;parcelGroup.setStyle(parcelStyle);};
 $('zoom-in').onclick=()=>map.zoomIn();$('zoom-out').onclick=()=>map.zoomOut();$('home').onclick=()=>map.setView([23.7,120.95],7);
-map.on('mousemove',e=>$('coordinates').textContent=`經度 ${e.latlng.lng.toFixed(6)}°　緯度 ${e.latlng.lat.toFixed(6)}°`);map.on('zoomend',()=>$('zoom-level').textContent=map.getZoom());
+map.on('mousemove',e=>$('coordinates').textContent=`經度 ${e.latlng.lng.toFixed(6)}°　緯度 ${e.latlng.lat.toFixed(6)}°`);map.on('zoomend',()=>{$('zoom-level').textContent=map.getZoom();setLabels();});
 $('locate').onclick=()=>{if(!navigator.geolocation){toast('此瀏覽器不支援位置定位。');return;}navigator.geolocation.getCurrentPosition(pos=>{const p=[pos.coords.latitude,pos.coords.longitude];map.setView(p,17);L.circle(p,{radius:pos.coords.accuracy,color:'#377eaf',weight:1,fillOpacity:.12}).addTo(map).bindPopup('目前定位位置（含定位誤差範圍）').openPopup();},()=>toast('無法取得位置，請確認瀏覽器的位置權限與 HTTPS 連線。'),{timeout:10000});};
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('.map-stage').requestFullscreen();setTimeout(()=>map.invalidateSize(),100);}catch{toast('此瀏覽器無法使用全螢幕模式。');}};
 $('measure').onclick=()=>{measuring=!measuring;$('measure').classList.toggle('active',measuring);$('measure-hint').hidden=!measuring;map.getContainer().style.cursor=measuring?'crosshair':'';if(measuring){measurePoints=[];if(measureLayer)map.removeLayer(measureLayer);measureLayer=L.polyline([],{color:'#244f40',dashArray:'5 5',weight:3}).addTo(map);}else if(measurePoints.length<2&&measureLayer)map.removeLayer(measureLayer);};
