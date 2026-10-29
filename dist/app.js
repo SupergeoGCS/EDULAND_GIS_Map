@@ -166,14 +166,14 @@ function revealParcel(bounds,focus=false){
  const bottom=Math.max(top+1,size.y-($('table-panel').hidden?45:255));
  const nw=map.latLngToContainerPoint(bounds.getNorthWest()),se=map.latLngToContainerPoint(bounds.getSouthEast());
  if(focus||se.x-nw.x>right-left||se.y-nw.y>bottom-top){
-  map.fitBounds(bounds,{paddingTopLeft:[left,top],paddingBottomRight:[size.x-right,size.y-bottom],maxZoom:focus?Math.max(18,zoom):zoom});
+  map.fitBounds(bounds,{paddingTopLeft:[left,top],paddingBottomRight:[size.x-right,size.y-bottom],maxZoom:focus?map.getMaxZoom():zoom});
   return;
  }
  const dx=nw.x<left?nw.x-left:se.x>right?se.x-right:0;
  const dy=nw.y<top?nw.y-top:se.y>bottom?se.y-bottom:0;
  if(dx||dy)map.panBy([dx,dy]);
 }
-function selectFeature(feature,focus=false){
+function selectFeature(feature,focus=true){
  let parcelCenter,parcelBounds;
  selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelBounds=layer.getBounds();parcelCenter=parcelBounds.getCenter();layer.bringToFront();}});
  const content=$('detail-content');content.replaceChildren();
