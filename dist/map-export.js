@@ -58,6 +58,7 @@ function buildMapReport(mapCanvas,scale,snapshot){
  const titleLines=wrapExportText(ctx,snapshot.title,width-pad*2);
  const headerHeight=24+titleLines.length*27;
  const legend=map.hasLayer(parcelGroup)?symbolGroups(filtered).map(([name])=>({name,color:symbolSchemes.get(symbolField).get(name)})):[];
+ if(map.hasLayer(parcelGroup))for(const [feature,color] of markedParcels)legend.push({name:`標註地籍：${['city','district','section','parcel'].map(key=>value(feature,key)).filter(Boolean).join(' / ')}`,color});
  const layerNames=overlayRegistry.filter(entry=>map.hasLayer(entry.layer)).map(entry=>entry.name);
  const bounds=snapshot.bounds;
  const metadata=[

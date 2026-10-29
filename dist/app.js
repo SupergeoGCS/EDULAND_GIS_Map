@@ -8,6 +8,8 @@ const colors = {'出租':'#bd934d','自用':'#3c9a7c','占用':'#c77465','未利
 const symbolPalette=['#3c9a7c','#bd934d','#738fb2','#c77465','#8e78ad','#4e9ba6','#a79062','#b97c9b'];
 let symbolField='field:usage';
 const symbolSchemes=new Map();
+const markedParcels=new Map();
+let markColor='#e34f85';
 const PARCEL_LABEL_MIN_ZOOM = 17;
 let dataset, filtered = [], mapping = {}, selected = null, testDataset = true, pending = null, pickedFiles = [], busy = false, measuring = false, measurePoints = [], measureLayer;
 let toastTimer, baseErrors = 0, tileTimer, importLabel = '';
@@ -29,7 +31,7 @@ for(const [key,layer] of Object.entries(bases)){
 }
 const parcelGroup = L.geoJSON(null,{style:feature=>parcelStyle(feature),onEachFeature:(feature,layer)=>{
  layer.on('click',event=>{if(!measuring){L.DomEvent.stopPropagation(event);selectFeature(feature);}});
- layer.on('mouseover',()=>{if(feature!==selected)layer.setStyle({weight:3,fillOpacity:.5});});
+ layer.on('mouseover',()=>{if(feature!==selected)layer.setStyle({weight:markedParcels.has(feature)?4.5:3,fillOpacity:.5});});
  layer.on('mouseout',()=>layer.setStyle(parcelStyle(feature)));
 }}).addTo(map);
 parcelGroup.on('add remove',setLabels);
@@ -62,7 +64,16 @@ function ensureSymbolColors(){
  symbolGroups().forEach(([name],index)=>{if(!scheme.has(name))scheme.set(name,symbolField==='field:usage'?(colors[name]||'#7a9a89'):symbolPalette[index%symbolPalette.length]);});
 }
 function symbolColor(feature){return symbolSchemes.get(symbolField)?.get(symbolValue(feature))||'#7a9a89';}
-function parcelStyle(feature){return {color:feature===selected?'#193f38':symbolColor(feature),weight:feature===selected?3.5:2,fillColor:symbolColor(feature),fillOpacity:Number($('opacity').value)/100};}
+function parcelStyle(feature){return {color:markedParcels.get(feature)||(feature===selected?'#193f38':symbolColor(feature)),weight:markedParcels.has(feature)?4.5:feature===selected?3.5:2,fillColor:symbolColor(feature),fillOpacity:Number($('opacity').value)/100};}
+function addMarkControls(content,feature){
+ const block=document.createElement('div');block.className='parcel-mark-controls';
+ block.innerHTML='<h3>地籍標註</h3><div class="parcel-mark-row"><label class="parcel-mark-toggle"><input type="checkbox" id="parcel-mark-toggle">標註此筆地籍</label><label class="parcel-mark-color">外框顏色<input type="color" id="parcel-mark-color" aria-label="標註外框顏色"></label></div><p class="hint">可同時標註多筆，匯出圖片會保留；重新查詢時清除。</p>';
+ const toggle=block.querySelector('#parcel-mark-toggle'),picker=block.querySelector('#parcel-mark-color');toggle.checked=markedParcels.has(feature);picker.value=markedParcels.get(feature)||markColor;
+ const refresh=()=>{parcelGroup.setStyle(parcelStyle);parcelGroup.eachLayer(layer=>{if(markedParcels.has(layer.feature))layer.bringToFront();});renderResults();renderLegend();resetExportPreview();};
+ toggle.onchange=()=>{if(toggle.checked)markedParcels.set(feature,picker.value);else markedParcels.delete(feature);refresh();};
+ picker.oninput=()=>{markColor=picker.value;if(markedParcels.has(feature)){markedParcels.set(feature,picker.value);refresh();}};
+ content.append(block);
+}
 function updateSymbology(){
  parcelGroup.setStyle(parcelStyle);renderLegend();
  if(typeof resetExportPreview==='function')resetExportPreview();
@@ -109,6 +120,7 @@ function updateDistrict(){const subset=dataset.features.filter(f=>!$('city').val
 function updateSection(){const subset=dataset.features.filter(f=>(!$('city').value||String(value(f,'city'))===$('city').value)&&(!$('district').value||String(value(f,'district'))===$('district').value));populateSelect('section',subset);}
 $('city').onchange=()=>{$('district').value='';$('section').value='';updateDistrict();};$('district').onchange=()=>{$('section').value='';updateSection();};
 function applySearch(){
+ markedParcels.clear();if($('parcel-mark-toggle'))$('parcel-mark-toggle').checked=false;
  updateSearchSummary();
  const keyword=$('keyword').value.trim().toLocaleLowerCase();
  filtered=dataset.features.filter(f=>['city','district','section','usage'].every(k=>!$(k).value||String(value(f,k))===$(k).value)&&(!keyword||Object.values(f.properties||{}).some(v=>displayValue(v).toLocaleLowerCase().includes(keyword))));
@@ -122,10 +134,11 @@ function renderResults(){
  filtered.slice(0,250).forEach((feature,index)=>{
   const button=document.createElement('button');button.className=`result-card${feature===selected?' selected':''}`;
   button.innerHTML=`<div><b>${escapeHTML(displayValue(value(feature,'parcel')))}</b><span class="usage-badge" style="color:${usageColor(feature)}">${escapeHTML(displayValue(value(feature,'usage')))}</span></div><small>${escapeHTML([value(feature,'city'),value(feature,'district'),value(feature,'section')].filter(Boolean).join(' · ')||'未提供行政區資訊')}</small>`;
-  button.onclick=()=>selectFeature(feature);$('results').append(button);
+  if(markedParcels.has(feature)){const mark=document.createElement('span');mark.className='parcel-mark-badge';mark.style.color=markedParcels.get(feature);mark.textContent='● 已標註';button.append(mark);}
+  button.onclick=()=>selectFeature(feature,true);$('results').append(button);
   const row=document.createElement('tr');row.tabIndex=0;row.setAttribute('aria-label',`查看地籍 ${displayValue(value(feature,'parcel'))}`);
   for(const text of [value(feature,'parcel'),[value(feature,'city'),value(feature,'district')].filter(Boolean).join(' / '),value(feature,'section'),value(feature,'area'),value(feature,'usage'),value(feature,'manager')]){const td=document.createElement('td');td.textContent=displayValue(text);row.append(td);}
-  row.onclick=()=>selectFeature(feature);row.onkeydown=e=>{if(e.key==='Enter')selectFeature(feature);};$('table-body').append(row);
+  row.onclick=()=>selectFeature(feature,true);row.onkeydown=e=>{if(e.key==='Enter')selectFeature(feature,true);};$('table-body').append(row);
  });
  if(filtered.length>250){const p=document.createElement('p');p.className='hint';p.textContent='清單顯示前 250 筆；地圖及匯出包含全部查詢結果，請縮小條件。';$('results').append(p);}
 }
@@ -133,6 +146,7 @@ function renderLegend(){
  const unique=symbolGroups(filtered);const html=unique.map(([v])=>`<div class="legend-row"><i class="legend-dot" style="background:${symbolSchemes.get(symbolField).get(v)}"></i>${escapeHTML(v)}</div>`).join('');
  $('legend-title').textContent=symbolTitle();$('legend-sidebar-title').textContent=`${symbolTitle()}圖例`;
  $('legend').innerHTML=html;$('legend-sidebar').innerHTML=html;
+ if(markedParcels.size){const marks='<div class="mark-legend-title">標註地籍</div>'+[...markedParcels].map(([feature,color])=>`<div class="legend-row"><i class="legend-dot" style="background:${color}"></i>${escapeHTML(displayValue(value(feature,'parcel')))}</div>`).join('');$('legend').insertAdjacentHTML('beforeend',marks);$('legend-sidebar').insertAdjacentHTML('beforeend',marks);}
 }
 function setLabels(){
  const show=$('labels-toggle').checked&&map.hasLayer(parcelGroup)&&map.getZoom()>=PARCEL_LABEL_MIN_ZOOM;
@@ -142,7 +156,7 @@ function setLabels(){
  });
 }
 function fitResults(){if(filtered.length){const bounds=parcelGroup.getBounds();if(bounds.isValid())map.fitBounds(bounds,{padding:[55,55],maxZoom:17});}else toast('目前沒有可定位的查詢結果。');}
-function revealParcel(bounds){
+function revealParcel(bounds,focus=false){
  map.stop();
  const size=map.getSize(),zoom=map.getZoom();
  const mapRect=$('map').getBoundingClientRect(),detailRect=$('details').getBoundingClientRect();
@@ -151,15 +165,15 @@ function revealParcel(bounds){
  const right=detailEdge>left+80?Math.min(size.x-35,detailEdge):size.x-Math.min(390,size.x*.45);
  const bottom=Math.max(top+1,size.y-($('table-panel').hidden?45:255));
  const nw=map.latLngToContainerPoint(bounds.getNorthWest()),se=map.latLngToContainerPoint(bounds.getSouthEast());
- if(se.x-nw.x>right-left||se.y-nw.y>bottom-top){
-  map.fitBounds(bounds,{paddingTopLeft:[left,top],paddingBottomRight:[size.x-right,size.y-bottom],maxZoom:zoom});
+ if(focus||se.x-nw.x>right-left||se.y-nw.y>bottom-top){
+  map.fitBounds(bounds,{paddingTopLeft:[left,top],paddingBottomRight:[size.x-right,size.y-bottom],maxZoom:focus?Math.max(18,zoom):zoom});
   return;
  }
  const dx=nw.x<left?nw.x-left:se.x>right?se.x-right:0;
  const dy=nw.y<top?nw.y-top:se.y>bottom?se.y-bottom:0;
  if(dx||dy)map.panBy([dx,dy]);
 }
-function selectFeature(feature){
+function selectFeature(feature,focus=false){
  let parcelCenter,parcelBounds;
  selected=feature;parcelGroup.eachLayer(layer=>{layer.setStyle(parcelStyle(layer.feature));if(layer.feature===feature){parcelBounds=layer.getBounds();parcelCenter=parcelBounds.getCenter();layer.bringToFront();}});
  const content=$('detail-content');content.replaceChildren();
@@ -175,11 +189,12 @@ function selectFeature(feature){
   const mapsLink=document.createElement('a');mapsLink.className='google-maps-link';
   const mapsURL=new URL('https://www.google.com/maps/search/');mapsURL.searchParams.set('api','1');mapsURL.searchParams.set('query',`${parcelCenter.lat.toFixed(6)},${parcelCenter.lng.toFixed(6)}`);
   mapsLink.href=mapsURL.href;mapsLink.target='_blank';mapsLink.rel='noopener noreferrer';mapsLink.referrerPolicy='no-referrer';mapsLink.textContent='在 Google 地圖查看 ↗';mapsLink.setAttribute('aria-label',`在 Google 地圖查看地籍 ${displayValue(value(feature,'parcel'))}（另開分頁）`);mapsLink.title='以地籍外框中心座標定位，另開分頁';content.append(mapsLink);
+  addMarkControls(content,feature);
   addBufferControls(content,feature,parcelCenter);
  }
  const raw=document.createElement('details');raw.className='raw-details';const summary=document.createElement('summary');summary.textContent='查看全部原始屬性';raw.append(summary);const rawList=document.createElement('dl');rawList.className='property-list';
  for(const [key,v] of Object.entries(feature.properties||{})){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=displayValue(v);row.append(dt,dd);rawList.append(row);}raw.append(rawList);content.append(raw);
- const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();if(parcelBounds)revealParcel(parcelBounds);
+ const hint=document.createElement('p');hint.className='hint';hint.textContent=testDataset?'資料來源：使用者提供的 EDU_LAND.zip，供測試展示，未與最新土地登記資料核驗。':'屬性來自匯入檔案，未與正式土地登記資料核驗。';content.append(hint);$('details').hidden=false;renderResults();if(parcelBounds)revealParcel(parcelBounds,focus);
 }
 function refreshBufferSummary(){
  const visible=[...parcelBuffers.values()].filter(entry=>map.hasLayer(entry.layer)).length;
