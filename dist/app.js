@@ -270,7 +270,8 @@ $('locate').onclick=()=>{if(!navigator.geolocation){toast('此瀏覽器不支援
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('.map-stage').requestFullscreen();setTimeout(()=>map.invalidateSize(),100);}catch{toast('此瀏覽器無法使用全螢幕模式。');}};
 $('measure').onclick=()=>{measuring=!measuring;$('measure').classList.toggle('active',measuring);$('measure-hint').hidden=!measuring;map.getContainer().style.cursor=measuring?'crosshair':'';if(measuring){measurePoints=[];if(measureLayer)map.removeLayer(measureLayer);measureLayer=L.polyline([],{color:'#244f40',dashArray:'5 5',weight:3}).addTo(map);}else if(measurePoints.length<2&&measureLayer)map.removeLayer(measureLayer);};
 map.on('click',e=>{if(!measuring)return;measurePoints.push(e.latlng);measureLayer.setLatLngs(measurePoints);let distance=0;for(let i=1;i<measurePoints.length;i++)distance+=map.distance(measurePoints[i-1],measurePoints[i]);measureLayer.bindTooltip(distance>=1000?`${(distance/1000).toFixed(2)} 公里`:`${distance.toFixed(1)} 公尺`,{permanent:true}).openTooltip();});
-function toggleTable(open){$('table-panel').hidden=!open;document.querySelector('.map-stage').classList.toggle('table-open',open);$('table-toggle').setAttribute('aria-expanded',String(open));}
+const TABLE_VIEW_ENABLED=false;
+function toggleTable(open){open=TABLE_VIEW_ENABLED&&open;$('table-panel').hidden=!open;document.querySelector('.map-stage').classList.toggle('table-open',open);$('table-toggle').setAttribute('aria-expanded',String(open));}
 $('table-toggle').onclick=()=>toggleTable($('table-panel').hidden);$('close-table').onclick=()=>toggleTable(false);
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 function openImport(){if(document.fullscreenElement)document.exitFullscreen();$('import-dialog').showModal();}
